@@ -3,3 +3,4 @@ lightgbm
 joblib
 numpy
 scipy
+pandas

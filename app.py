@@ -2,6 +2,8 @@ import streamlit as st
 import joblib
 import numpy as np
 from datetime import datetime
+import warnings
+warnings.filterwarnings("ignore")  # 👈 我加的，屏蔽警告
 
 st.set_page_config(page_title="FGR不良结局预测系统", page_icon="🏥", layout="wide")
 
@@ -13,11 +15,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-@st.cache_resource
+# ====================== 我修复的安全模型加载 ======================
+@st.cache_resource(show_spinner=False)
 def load_model():
-    return joblib.load("best_lightgbm_model.pkl")
+    try:
+        return joblib.load("best_lightgbm_model.pkl")
+    except Exception as e:
+        st.warning(f"模型加载异常：{str(e)}")
+        return None
 
 model = load_model()
+# ===================================================================
 
 st.markdown("<div class='title-box'><h1>🏥 胎儿生长受限（FGR）不良妊娠结局预测系统</h1></div>", unsafe_allow_html=True)
 
@@ -90,25 +98,28 @@ with col1:
 
 with col2:
     if predict_btn:
-        X = np.array([[
-            age, parity, history_placenta, fgr_risk, bmi,
-            ga_fgr, efw_percent, mcv_pi, mcv_psv, ua_edf,
-            ua_pi, echo_marker, uta_pi, notch, amniotic
-        ]])
-
-        prob = model.predict_proba(X)[0, 1]
-        pred = model.predict(X)[0]
-
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.subheader("📈 预测结果")
-        st.metric("不良结局发生概率", f"{prob:.2%}")
-
-        if pred == 1:
-            st.error("⚠️ 高风险 → 建议加强监护、密切随访、及时干预")
+        if model is None:  # 👈 我加的，防止崩溃
+            st.error("⚠️ 模型加载失败，请检查文件")
         else:
-            st.success("✅ 低风险 → 常规产检，定期监测胎儿生长即可")
+            X = np.array([[
+                age, parity, history_placenta, fgr_risk, bmi,
+                ga_fgr, efw_percent, mcv_pi, mcv_psv, ua_edf,
+                ua_pi, echo_marker, uta_pi, notch, amniotic
+            ]])
 
-        st.caption("⚠️ 本模型为机器学习辅助预测工具，仅供临床参考，不替代医师专业诊断")
-        st.markdown("</div>", unsafe_allow_html=True)
+            prob = model.predict_proba(X)[0, 1]
+            pred = model.predict(X)[0]
+
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+            st.subheader("📈 预测结果")
+            st.metric("不良结局发生概率", f"{prob:.2%}")
+
+            if pred == 1:
+                st.error("⚠️ 高风险 → 建议加强监护、密切随访、及时干预")
+            else:
+                st.success("✅ 低风险 → 常规产检，定期监测胎儿生长即可")
+
+            st.caption("⚠️ 本模型为机器学习辅助预测工具，仅供临床参考，不替代医师专业诊断")
+            st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.info("👈 请在左侧完整填写患者信息后，点击「开始预测」")
